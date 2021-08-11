@@ -356,6 +356,10 @@ function DataStore:SetKeyValue(key, newValue)
 	self.value[key] = newValue
 end
 
+function DataStore:PlayerRemoved(callback)
+	table.insert(self.playerRemoved, callback)
+end
+
 local CombinedDataStore = {}
 
 do
@@ -537,6 +541,7 @@ function DataStore2.__call(_, dataStoreName, player)
 		beforeInitialGet = {},
 		afterSave = {},
 		bindToClose = {},
+		playerRemoved = {},
 	}
 
 	dataStore.savingMethod = SavingMethods[Settings.SavingMethod].new(dataStore)
@@ -595,7 +600,22 @@ function DataStore2.__call(_, dataStoreName, player)
 		--Give a long delay for people who haven't figured out the cache :^(
 		return Promise.delay(40):andThen(function() 
 			DataStoreCache[player] = nil
-			bindToCloseCallback = nil
+			
+			-- Need to set the bindToCloseCallback function to nil when the player leaves in order to prevent a memory leak
+				-- Note: The maximum wait for BindToClose is 30 seconds
+				-- If the experience was closing, BindToClose should have run by this point
+			bindToCloseCallback = nil 
+		end):andThen(function()
+			-- Guarantee that the final save attempt finished
+			if not isSaveFinished then
+				saveFinishedEvent.Event:Wait()
+			end
+
+			local value = dataStore:Get(nil, true)
+
+			for _, playerRemoved in ipairs(dataStore.playerRemoved) do
+				playerRemoved(player, value)
+			end
 		end)
 	end)
 
