@@ -15,8 +15,9 @@ end
 
 function Standard:Set(value)
 	return Promise.async(function(resolve)
-		self.dataStore:UpdateAsync(self.userId, function()
-			return value
+		self.dataStore:UpdateAsync(self.userId, function(_, keyInfo)
+			local metadata = keyInfo and keyInfo:GetMetadata()
+			return value, {self.userId}, metadata
 		end)
 
 		resolve()
